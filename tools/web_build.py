@@ -65,11 +65,11 @@ WATCH_HASH = ANDROID_DIR / "host" / "host_watch_hash.c"
 # The Xbox window (port/linux/src/platform.h) is the top 128 MB of the
 # WebAssembly memory, 0x80000000 to 0x88000000; the C heap has everything
 # below it (port/web/src/web_main.c).
-# 0x88000000 = 2.1 GB - too large for iOS Safari on many iPads.
-# Use 1.5 GB (0x60000000) as initial with growth allowed for iOS compatibility.
-# The Xbox window at 0x80000000 still needs to fit, so max must be at least that.
-WEB_MEMORY_BYTES = 0x60000000  # 1.5 GB initial
-WEB_MEMORY_MAX_BYTES = 0x88000000  # 2.1 GB max (allows Xbox window)
+# The game requires the window at startup (its allocator checks the memory
+# covers it), so the memory is made the full size: a smaller initial size
+# with growth only moves the failure on a browser that lacks it from the
+# page's clean check to a crash while the game starts.
+WEB_MEMORY_BYTES = 0x88000000
 
 # The ABI the game was written for, as the other builds reproduce it
 # (tools/linux_build.py LINUX_ABI_FLAGS): 16-bit wchar_t, MSVC's extensions,
@@ -314,8 +314,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
             "-sWASMFS=1",
             "-lopfs.js",
             f"-sINITIAL_MEMORY={WEB_MEMORY_BYTES}",
-            f"-sMAXIMUM_MEMORY={WEB_MEMORY_MAX_BYTES}",
-            "-sALLOW_MEMORY_GROWTH=1",
+            "-sALLOW_MEMORY_GROWTH=0",
             # (the game recurses deeply in places: scripts, the BSP's walks)
             "-sSTACK_SIZE=8MB",
             "-sDEFAULT_PTHREAD_STACK_SIZE=2MB",
@@ -328,7 +327,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
         # (the memory, which the page reads web_state's words from, and what
         # the page hands the room's frames to the game with: net.js)
         "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU32",
-        "-sEXPORTED_FUNCTIONS=_main,_malloc,_free,emscripten_resize_heap",
+        "-sEXPORTED_FUNCTIONS=_main,_malloc,_free",
         f"-sASSERTIONS={0 if release else 1}",
         # function names in stack traces (the name section only)
         "--profiling-funcs",

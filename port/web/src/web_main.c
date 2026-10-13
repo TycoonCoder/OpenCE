@@ -31,8 +31,7 @@ void web_js_post(int kind, const char *text);
 The Xbox window (port/linux/src/platform.h) is the top 128 MB of the
 WebAssembly memory, 0x80000000 to 0x88000000 (tools/web_build.py makes the
 memory that size). sbrk grows the C heap up to the heap size this reports,
-so reporting the window's start keeps the heap below it. The initial memory
-may be smaller (1.5 GB) with growth allowed up to 2.1 GB. */
+so reporting the window's start keeps the heap below it. */
 
 #define WEB_XBOX_WINDOW_START 0x80000000UL
 
@@ -87,9 +86,6 @@ int main(int argc, char **argv)
 			setenv(name, equals + 1, 1);
 		}
 	}
-
-	/* Grow memory to cover the Xbox window before the game starts */
-	/* Now done from JavaScript (app.js) before loading halo.js */
 
 	opfs = wasmfs_create_opfs_backend();
 	if (!opfs || wasmfs_create_directory("/data", 0777, opfs) != 0)

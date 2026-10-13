@@ -99,11 +99,10 @@ def test_the_platform_layer_leaves_out_what_a_browser_has_not():
 def test_the_link_makes_the_memory_the_window_needs():
     flags = link_flags(graph()).split()
     for flag in ("-sPROXY_TO_PTHREAD=1", "-sOFFSCREENCANVASES_TO_PTHREAD=#canvas", "-sMIN_WEBGL_VERSION=2",
-                 "-sMAX_WEBGL_VERSION=2", "-sWASMFS=1", "-lopfs.js", "-sALLOW_MEMORY_GROWTH=1",
+                 "-sMAX_WEBGL_VERSION=2", "-sWASMFS=1", "-lopfs.js", "-sALLOW_MEMORY_GROWTH=0",
                  "-Wl,--fatal-warnings", "-sASSERTIONS=1", "--profiling-funcs"):
         assert flag in flags, flag
-    assert f"-sINITIAL_MEMORY={0x60000000}" in flags
-    assert f"-sMAXIMUM_MEMORY={0x88000000}" in flags
+    assert f"-sINITIAL_MEMORY={0x88000000}" in flags
     release = graph(release=True)
     assert "-DHALO_RELEASE" in compile_flags(release, "source/main/main.c")
     assert "-sASSERTIONS=0" in link_flags(release).split()
@@ -115,11 +114,7 @@ def test_the_memory_layout_agrees_with_the_sources():
     sizes = re.search(r"#if defined\(HALO_ARM64_GUEST\) \|\| defined\(HALO_WEB\).*?#define PLATFORM_CONTIGUOUS_SIZE "
                       r"(0x[0-9A-Fa-f]+)", platform, re.S)
     assert sizes, "platform.h gives the web build the 128 MB window"
-    xbox_window_end = base + int(sizes.group(1), 16)  # 0x88000000
-    # The web build uses 1.5 GB initial (0x60000000) with growth to 2.1 GB max (0x88000000)
-    # The max must be at least the Xbox window end
-    assert web_build.WEB_MEMORY_MAX_BYTES == xbox_window_end
-    assert web_build.WEB_MEMORY_BYTES < xbox_window_end  # initial is smaller for iOS compatibility
+    assert web_build.WEB_MEMORY_BYTES == base + int(sizes.group(1), 16)
     main = (ROOT / "port/web/src/web_main.c").read_text()
     assert int(re.search(r"#define WEB_XBOX_WINDOW_START (0x[0-9A-Fa-f]+)", main).group(1), 16) == base
     app = (ROOT / "port/web/site/app.js").read_text()

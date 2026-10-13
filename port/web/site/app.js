@@ -30,7 +30,7 @@ then fills the page.
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 // the Xbox window ends the game's memory: tools/web_build.py WEB_MEMORY_BYTES
-const WEB_MEMORY_BYTES = 0x60000000;
+const WEB_MEMORY_BYTES = 0x88000000;
 const MAXIMUM_LOG_LINES = 20000;
 
 // ---------- the log: the game's output, for the player to send
@@ -243,7 +243,7 @@ function workerWebGL2() {
 
 function memoryAvailable() {
   try {
-    const pages = (0x60000000) / 65536;  // 1.5 GB initial
+    const pages = WEB_MEMORY_BYTES / 65536;
     new WebAssembly.Memory({ initial: pages, maximum: pages, shared: true });
     return true;
   } catch {
@@ -261,7 +261,7 @@ async function runChecks() {
   const opfs = !!(navigator.storage && navigator.storage.getDirectory);
   addCheck('opfs', opfs ? 'good' : 'bad', "The site's private storage (OPFS)");
   const memory = window.crossOriginIsolated && memoryAvailable();
-  addCheck('memory', memory ? 'good' : 'bad', 'Memory for the game (1.5 GB initial, up to 2.1 GB)',
+  addCheck('memory', memory ? 'good' : 'bad', 'Memory for the game (2.1 GB)',
     memory ? '' : 'this browser could not give the game that much: a 64-bit browser on a computer has it');
   
   // iOS compatibility check
@@ -643,16 +643,6 @@ async function play() {
   }
   try {
     await prepareInit();
-    // Grow WebAssembly memory to 2.1 GB (covers Xbox window at 0x88000000)
-    // Initial memory is 1.5 GB for iOS compatibility, but game needs 2.1 GB
-    if (window.Module && window.Module.HEAP8 && window.Module._emscripten_resize_heap) {
-      const targetBytes = 0x88000000; // 2.1 GB
-      try {
-        await window.Module._emscripten_resize_heap(targetBytes);
-      } catch (e) {
-        console.warn('Memory growth failed:', e);
-      }
-    }
     await loadScript('halo.js');
     const options = {
       canvas,
