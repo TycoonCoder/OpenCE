@@ -85,7 +85,7 @@ WEB_ABI_FLAGS = [
     "-msimd128",
     "-mbulk-memory",
     "-mnontrapping-fptoint",
-    "-O2",
+    "-O3",
     "-g2",
 ]
 
@@ -296,45 +296,45 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     halo_js = site_dir / "halo.js"
     halo_wasm = site_dir / "halo.wasm"
     link_flags = [
-        "-O2", "-g2", "-pthread", sdl_flag,
-        # a call that does not match its callee's type is an error, not a
-        # trap when it runs
-        "-Wl,--fatal-warnings",
-        # the game's main on a thread of its own, where it may block; the
-        # page's thread only passes events
-        "-sPROXY_TO_PTHREAD=1",
-        # (the game's threads, SDL's, the file system's: about ten at once)
-        # Reduced from 16 to 8 for iOS Safari compatibility (threads may serialize on iOS)
-        "-sPTHREAD_POOL_SIZE=8",
-        "-sOFFSCREENCANVAS_SUPPORT=1",
-        "-sOFFSCREENCANVASES_TO_PTHREAD=#canvas",
-        "-sMIN_WEBGL_VERSION=2",
-        "-sMAX_WEBGL_VERSION=2",
-        "-sGL_ENABLE_GET_PROC_ADDRESS=1",
-        "-sWASMFS=1",
-        "-lopfs.js",
-        f"-sINITIAL_MEMORY={WEB_MEMORY_BYTES}",
-        f"-sMAXIMUM_MEMORY={WEB_MEMORY_MAX_BYTES}",
-        "-sALLOW_MEMORY_GROWTH=1",
-        # (the game recurses deeply in places: scripts, the BSP's walks)
-        "-sSTACK_SIZE=8MB",
-        "-sDEFAULT_PTHREAD_STACK_SIZE=2MB",
-        "-sEXIT_RUNTIME=0",
-        "-sENVIRONMENT=web,worker",
-        "-sERROR_ON_UNDEFINED_SYMBOLS=1",
-        # the page gives the game its arguments and reads its output
-        "-sMODULARIZE=1",
-        "-sEXPORT_NAME=createHalo",
-        # (the memory, which the page reads web_state's words from, and what
-        # the page hands the room's frames to the game with: net.js)
-        "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU32",
-        "-sEXPORTED_FUNCTIONS=_main,_malloc,_free",
-        f"-sASSERTIONS={0 if release else 1}",
-        # function names in stack traces (the name section only)
-        "--profiling-funcs",
-        f"--js-library {library_js}",
-        f"--pre-js {pre_js}",
-    ]
+            "-O3", "-g2", "-pthread", sdl_flag,
+            # a call that does not match its callee's type is an error, not a
+            # trap when it runs
+            "-Wl,--fatal-warnings",
+            # the game's main on a thread of its own, where it may block; the
+            # page's thread only passes events
+            "-sPROXY_TO_PTHREAD=1",
+            # (the game's threads, SDL's, the file system's: about ten at once)
+            # Reduced from 16 to 8 for iOS Safari compatibility (threads may serialize on iOS)
+            "-sPTHREAD_POOL_SIZE=8",
+            "-sOFFSCREENCANVAS_SUPPORT=1",
+            "-sOFFSCREENCANVASES_TO_PTHREAD=#canvas",
+            "-sMIN_WEBGL_VERSION=2",
+            "-sMAX_WEBGL_VERSION=2",
+            "-sGL_ENABLE_GET_PROC_ADDRESS=1",
+            "-sWASMFS=1",
+            "-lopfs.js",
+            f"-sINITIAL_MEMORY={WEB_MEMORY_BYTES}",
+            f"-sMAXIMUM_MEMORY={WEB_MEMORY_MAX_BYTES}",
+            "-sALLOW_MEMORY_GROWTH=1",
+            # (the game recurses deeply in places: scripts, the BSP's walks)
+            "-sSTACK_SIZE=8MB",
+            "-sDEFAULT_PTHREAD_STACK_SIZE=2MB",
+            "-sEXIT_RUNTIME=0",
+            "-sENVIRONMENT=web,worker",
+            "-sERROR_ON_UNDEFINED_SYMBOLS=1",
+            # the page gives the game its arguments and reads its output
+            "-sMODULARIZE=1",
+            "-sEXPORT_NAME=createHalo",
+            # (the memory, which the page reads web_state's words from, and what
+            # the page hands the room's frames to the game with: net.js)
+            "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU32",
+            "-sEXPORTED_FUNCTIONS=_main,_malloc,_free",
+            f"-sASSERTIONS={0 if release else 1}",
+            # function names in stack traces (the name section only)
+            "--profiling-funcs",
+            f"--js-library {library_js}",
+            f"--pre-js {pre_js}",
+        ]
     n.rule(
         name="web_link",
         command="$web_emcc $ldflags -o $out @$out.rsp",

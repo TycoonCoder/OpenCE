@@ -30,7 +30,7 @@ then fills the page.
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 // the Xbox window ends the game's memory: tools/web_build.py WEB_MEMORY_BYTES
-const WEB_MEMORY_BYTES = 0x88000000;
+const WEB_MEMORY_BYTES = 0x60000000;
 const MAXIMUM_LOG_LINES = 20000;
 
 // ---------- the log: the game's output, for the player to send
@@ -208,6 +208,21 @@ function checkIOSCompatibility() {
     return { isIOS, isIPad, isIPhone, majorVersion };
   }
   return { isIOS: false };
+}
+
+// Apply iPad-optimized settings for better performance
+function getIPadOptimizedSettings() {
+  // These settings reduce GPU/CPU load significantly on iPad
+  return {
+    'HALO_RESOLUTION_SCALING': 'original',      // 640x480 native Xbox resolution
+    'HALO_ANTI_ALIASING': 'off',                 // Disable AA passes
+    'HALO_MAX_FPS': '30',                        // Match game's 30 Hz tick rate
+    'HALO_INTERPOLATION': 'false',               // No frame interpolation overhead
+    'HALO_HIGH_RES_HUD': 'false',                // Use stock HUD bitmaps
+    'HALO_HIGH_RES_TEXT': 'false',               // Use stock bitmap fonts
+    'HALO_PER_PIXEL_LIGHTING': 'false',          // Vertex lighting (Xbox style)
+    'HALO_SHADOW_RESOLUTION': '64',              // Lower shadow resolution
+  };
 }
 
 function workerWebGL2() {
@@ -730,6 +745,66 @@ $('gyro').addEventListener('click', () => {
   }
 });
 
+// Performance mode handlers
+let performanceModeEnabled = false;
+
+function updatePerformanceUI() {
+  const panel = $('performance-panel');
+  const status = $('performance-status');
+  const enableBtn = $('performance-enable');
+  const disableBtn = $('performance-disable');
+  
+  if (performanceModeEnabled) {
+    status.textContent = 'Performance mode is ACTIVE. Settings will apply on next game start.';
+    status.style.color = 'var(--good)';
+    enableBtn.hidden = true;
+    disableBtn.hidden = false;
+  } else {
+    status.textContent = 'Performance mode is INACTIVE. Current settings will be used.';
+    status.style.color = 'var(--muted)';
+    enableBtn.hidden = false;
+    disableBtn.hidden = true;
+  }
+}
+
+function applyPerformanceMode(enable) {
+  const settings = getIPadOptimizedSettings();
+  const prefix = '--HALO_';
+  
+  if (enable) {
+    // Store current settings so they can be restored
+    for (const [key, value] of Object.entries(settings)) {
+      const envKey = key.replace('HALO_', '');
+      // Note: We can't easily read current env vars from JS, so we just apply new ones
+      // The game will use the ?set= params which override config.toml
+    }
+    performanceModeEnabled = true;
+  } else {
+    performanceModeEnabled = false;
+  }
+  
+  // Update URL with performance settings
+  const newParams = new URLSearchParams(params);
+  if (enable) {
+    for (const [key, value] of Object.entries(settings)) {
+      newParams.set('set', `${key}=${value}`);
+    }
+  } else {
+    // Remove performance-related set params
+    const perfKeys = Object.keys(settings).map(k => k.replace('HALO_', ''));
+    const allSets = newParams.getAll('set');
+    const filtered = allSets.filter(s => !perfKeys.some(pk => s.startsWith(pk + '=')));
+    newParams.delete('set');
+    for (const s of filtered) newParams.append('set', s);
+  }
+  
+  history.replaceState(null, '', `${location.pathname}?${newParams}`);
+  updatePerformanceUI();
+}
+
+$('performance-enable').addEventListener('click', () => applyPerformanceMode(true));
+$('performance-disable').addEventListener('click', () => applyPerformanceMode(false));
+
 $('leave').addEventListener('click', () => {
   if (confirm('Quit the game? Progress since the last checkpoint is lost.')) location.reload();
 });
@@ -769,6 +844,23 @@ document.addEventListener('visibilitychange', async () => {
     }
     $('checks-note').hidden = false;
   }
+  
+  // Show performance panel for iPad and auto-enable if URL has perf params
+  const isIPad = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream && 
+                 (navigator.userAgent.includes('iPad') || (navigator.maxTouchPoints > 1 && screen.width >= 768));
+  if (isIPad) {
+    $('performance-panel').hidden = false;
+    // Check if performance mode params are already in URL
+    const perfSettings = getIPadOptimizedSettings();
+    const hasPerfParams = Object.entries(perfSettings).some(([key, value]) => {
+      const envKey = key.replace('HALO_', '');
+      return params.getAll('set').some(s => s.startsWith(envKey + '=') && s.endsWith('=' + value));
+    });
+    performanceModeEnabled = hasPerfParams;
+  }
+  
+  updatePerformanceUI();
+  
   if (results.opfs === 'good') await refreshData();
   else updatePlay();
   checkForUpdate();
