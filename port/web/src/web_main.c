@@ -65,6 +65,20 @@ static void set_default(const char *name, const char *value)
 	setenv(name, value, 0);
 }
 
+/* Grow the WebAssembly memory to cover the Xbox window (0x88000000 = 2.1 GB).
+The initial memory is 1.5 GB for iOS compatibility, but the Xbox window
+requires 2.1 GB. Call this before the game starts. */
+static void grow_memory_for_xbox_window(void)
+{
+	/* Target: 0x88000000 bytes = 2.1 GB = 32768 pages (64 KB each) */
+	const size_t target_pages = 0x88000000 / 65536;
+	size_t current_pages = (size_t)__builtin_wasm_memory_size(0);
+	
+	if (current_pages < target_pages) {
+		emscripten_resize_heap(target_pages * 65536);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	backend_t opfs;
@@ -87,6 +101,9 @@ int main(int argc, char **argv)
 			setenv(name, equals + 1, 1);
 		}
 	}
+
+	/* Grow memory to cover the Xbox window before the game starts */
+	grow_memory_for_xbox_window();
 
 	opfs = wasmfs_create_opfs_backend();
 	if (!opfs || wasmfs_create_directory("/data", 0777, opfs) != 0)
