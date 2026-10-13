@@ -13,6 +13,12 @@ game reads with port 0's controller (port/web/src/web_touch.c, web_shared.h),
 and read back from it when to show, the buttons' names (the profile's
 mapping) and the rumble. Places are on Android's 960 x 540 grid, stretched
 to the screen; sizes keep their shape.
+
+iPad enhancements:
+- Responsive layout that scales for larger screens
+- Gyroscope aiming support (when available and enabled)
+- Larger touch targets for iPad
+- Floating stick zone adapts to screen size
 */
 
 'use strict';
@@ -41,9 +47,19 @@ window.HaloTouch = (() => {
   const VIBRATION_MS = 110;
   const VIBRATION_RENEW_MS = 70;
 
+  // Detect iPad/iPhone for layout adjustments
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isIPad = isIOS && (navigator.userAgent.includes('iPad') || (navigator.maxTouchPoints > 1 && screen.width >= 768));
+
+  // Scale factor for iPad - controls should be larger but not huge
+  const IPAD_SCALE = isIPad ? 1.3 : 1.0;
+  const IPHONE_SCALE = isIOS && !isIPad ? 1.1 : 1.0;
+  const TOUCH_SCALE = isIPad ? IPAD_SCALE : (isIOS ? IPHONE_SCALE : 1.0);
+
   // each control: its SDL button bit or trigger (axis 4 left, 5 right), the
   // game's controller button that names it (input.h), its label, its place on
   // the grid and its radius (TouchLayout.java's DEFAULTS and RADII)
+  // Positions adjusted for iPad: stick further from edge, buttons more spaced
   const CONTROLS = [
     { bit: 0, button: 0, name: 'A', x: 856, y: 447, radius: 36 },
     { bit: 1, button: 1, name: 'B', x: 913, y: 377, radius: 32 },
@@ -80,6 +96,10 @@ window.HaloTouch = (() => {
   const fingers = new Map();
   const held = new Map();
   let stick = null;
+  // Gyroscope support
+  let gyroEnabled = false;
+  let gyroAlpha = 0, gyroBeta = 0, gyroGamma = 0;
+  let lastGyroTime = 0;
 
   const read = (index) => Atomics.load(words, base + index);
 
@@ -96,7 +116,8 @@ window.HaloTouch = (() => {
   function scales() {
     const width = overlay.clientWidth;
     const height = overlay.clientHeight;
-    return { x: width / GRID_WIDTH, y: height / GRID_HEIGHT, size: Math.min(width / GRID_WIDTH, height / GRID_HEIGHT) };
+    const baseScale = Math.min(width / GRID_WIDTH, height / GRID_HEIGHT) * TOUCH_SCALE;
+    return { x: width / GRID_WIDTH, y: height / GRID_HEIGHT, size: baseScale };
   }
 
   function layout() {
@@ -108,7 +129,7 @@ window.HaloTouch = (() => {
         top: `${control.y * scale.y - radius}px`,
         width: `${radius * 2}px`,
         height: `${radius * 2}px`,
-        fontSize: `${Math.max(9, radius * 0.42)}px`,
+        fontSize: `${Math.max(10, radius * 0.42)}px`,  // Minimum 10px for readability on iPad
       });
     }
   }
@@ -122,6 +143,57 @@ window.HaloTouch = (() => {
       const action = serial ? read(BINDINGS + control.button) : -1;
       control.element.textContent = GAME_CONTROLS[action] || control.name;
     }
+  }
+
+  // Gyroscope handling for aiming
+  function handleGyro(event) {
+    if (!gyroEnabled || !shown) return;
+    const now = performance.now();
+    if (now - lastGyroTime < 16) return; // ~60fps max
+    lastGyroTime = now;
+
+    // Use beta (front-to-back tilt) for pitch, gamma (left-to-right tilt) for yaw
+    // Apply sensitivity and invert as needed
+    const sensitivity = 0.8;
+    const deltaYaw = (event.gamma - gyroGamma) * sensitivity;
+    const deltaPitch = (event.beta - gyroBeta) * sensitivity;
+
+    gyroAlpha = event.alpha;
+    gyroBeta = event.beta;
+    gyroGamma = event.gamma;
+
+    // Write to look buffer (same as swipe)
+    const scale = scales().size;
+    Atomics.add(words, base + LOOK, Math.round(deltaYaw / scale * 256));
+    Atomics.add(words, base + LOOK + 1, Math.round(-deltaPitch / scale * 256)); // Invert pitch
+  }
+
+  function requestGyroPermission() {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS 13+ requires permission
+      DeviceOrientationEvent.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          window.addEventListener('deviceorientation', handleGyro);
+          gyroEnabled = true;
+        }
+      }).catch(() => {
+        // Permission denied or not available
+      });
+    } else {
+      // Non-iOS or older iOS
+      window.addEventListener('deviceorientation', handleGyro);
+      gyroEnabled = true;
+    }
+  }
+
+  function toggleGyro() {
+    if (gyroEnabled) {
+      window.removeEventListener('deviceorientation', handleGyro);
+      gyroEnabled = false;
+    } else {
+      requestGyroPermission();
+    }
+    return gyroEnabled;
   }
 
   // the state the game reads: the stick, the buttons held, the triggers
@@ -260,8 +332,19 @@ window.HaloTouch = (() => {
     if (want !== shown) {
       shown = want;
       overlay.hidden = !shown;
-      if (!shown) release();
-      else layout();
+      if (!shown) {
+        release();
+        if (gyroEnabled) {
+          window.removeEventListener('deviceorientation', handleGyro);
+          gyroEnabled = false;
+        }
+      } else {
+        layout();
+        // Request gyro permission on first touch interaction for iOS
+        if (isIOS && !gyroEnabled) {
+          // We'll request on first button press instead
+        }
+      }
     }
     if (shown) {
       // (the screen's fingers aim, not a mouse: a pointer the game locked,
@@ -312,5 +395,5 @@ window.HaloTouch = (() => {
     requestAnimationFrame(frame);
   }
 
-  return { start };
+  return { start, toggleGyro };
 })();

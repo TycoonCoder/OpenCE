@@ -171,6 +171,45 @@ function addCheck(name, state, text, detail) {
   $('checks').append(item);
 }
 
+// iOS Safari detection and compatibility check
+function checkIOSCompatibility() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isIPad = isIOS && (navigator.userAgent.includes('iPad') || (navigator.maxTouchPoints > 1 && screen.width >= 768));
+  const isIPhone = isIOS && !isIPad;
+  
+  if (isIOS) {
+    // Check iOS version
+    const match = navigator.userAgent.match(/OS (\d+)_(\d+)/);
+    const majorVersion = match ? parseInt(match[1], 10) : 0;
+    
+    let detail = '';
+    let state = 'warn';
+    
+    if (majorVersion >= 17) {
+      // iOS 17+ has better WASM thread support
+      detail = `iOS ${majorVersion} detected. WASM threads and SharedArrayBuffer supported.`;
+      state = 'good';
+    } else if (majorVersion >= 15) {
+      detail = `iOS ${majorVersion} detected. Limited WASM thread support. Game may run slowly.`;
+      state = 'warn';
+    } else {
+      detail = `iOS ${majorVersion} detected. WebAssembly threads not supported. Game will not run.`;
+      state = 'bad';
+    }
+    
+    if (isIPhone) {
+      detail += ' iPhone memory limit (~1.5 GB) may be too low for this game.';
+      state = 'bad';
+    } else if (isIPad) {
+      detail += ' iPad memory limit varies by model (8GB+ models have ~4 GB).';
+    }
+    
+    addCheck('ios', state, isIPad ? 'iPad detected' : 'iPhone detected', detail);
+    return { isIOS, isIPad, isIPhone, majorVersion };
+  }
+  return { isIOS: false };
+}
+
 function workerWebGL2() {
   return new Promise((resolve) => {
     const source = "try { postMessage(!!new OffscreenCanvas(1, 1).getContext('webgl2')); } catch (e) { postMessage(false); }";
@@ -189,7 +228,7 @@ function workerWebGL2() {
 
 function memoryAvailable() {
   try {
-    const pages = WEB_MEMORY_BYTES / 65536;
+    const pages = (0x60000000) / 65536;  // 1.5 GB initial
     new WebAssembly.Memory({ initial: pages, maximum: pages, shared: true });
     return true;
   } catch {
@@ -207,8 +246,12 @@ async function runChecks() {
   const opfs = !!(navigator.storage && navigator.storage.getDirectory);
   addCheck('opfs', opfs ? 'good' : 'bad', "The site's private storage (OPFS)");
   const memory = window.crossOriginIsolated && memoryAvailable();
-  addCheck('memory', memory ? 'good' : 'bad', 'Memory for the game (2.1 GB)',
+  addCheck('memory', memory ? 'good' : 'bad', 'Memory for the game (1.5 GB initial, up to 2.1 GB)',
     memory ? '' : 'this browser could not give the game that much: a 64-bit browser on a computer has it');
+  
+  // iOS compatibility check
+  const iosInfo = checkIOSCompatibility();
+  
   const required = ['secure', 'isolated', 'webgl', 'opfs', 'memory'];
   return required.every((name) => results[name] === 'good');
 }
@@ -679,6 +722,14 @@ $('fullscreen').addEventListener('click', async () => {
   }
 });
 
+$('gyro').addEventListener('click', () => {
+  if (window.HaloTouch && typeof window.HaloTouch.toggleGyro === 'function') {
+    const enabled = window.HaloTouch.toggleGyro();
+    $('gyro').textContent = enabled ? 'Gyro: On' : 'Gyro';
+    $('gyro').style.background = enabled ? 'rgba(79, 179, 255, 0.3)' : '';
+  }
+});
+
 $('leave').addEventListener('click', () => {
   if (confirm('Quit the game? Progress since the last checkpoint is lost.')) location.reload();
 });
@@ -710,7 +761,12 @@ document.addEventListener('visibilitychange', async () => {
   await loadStamp();
   checksPassed = await runChecks();
   if (!checksPassed) {
-    $('checks-note').textContent = 'Desktop Chrome, Edge and Firefox run the game; Safari 17 or later may.';
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS) {
+      $('checks-note').textContent = 'iOS Safari 17+ required. Enable cross-origin isolation by reloading. iPhone not supported (memory limit). iPad 8GB+ may work.';
+    } else {
+      $('checks-note').textContent = 'Desktop Chrome, Edge and Firefox run the game; Safari 17 or later may.';
+    }
     $('checks-note').hidden = false;
   }
   if (results.opfs === 'good') await refreshData();

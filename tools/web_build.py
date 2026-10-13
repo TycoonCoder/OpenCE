@@ -65,7 +65,11 @@ WATCH_HASH = ANDROID_DIR / "host" / "host_watch_hash.c"
 # The Xbox window (port/linux/src/platform.h) is the top 128 MB of the
 # WebAssembly memory, 0x80000000 to 0x88000000; the C heap has everything
 # below it (port/web/src/web_main.c).
-WEB_MEMORY_BYTES = 0x88000000
+# 0x88000000 = 2.1 GB - too large for iOS Safari on many iPads.
+# Use 1.5 GB (0x60000000) as initial with growth allowed for iOS compatibility.
+# The Xbox window at 0x80000000 still needs to fit, so max must be at least that.
+WEB_MEMORY_BYTES = 0x60000000  # 1.5 GB initial
+WEB_MEMORY_MAX_BYTES = 0x88000000  # 2.1 GB max (allows Xbox window)
 
 # The ABI the game was written for, as the other builds reproduce it
 # (tools/linux_build.py LINUX_ABI_FLAGS): 16-bit wchar_t, MSVC's extensions,
@@ -300,7 +304,8 @@ def generate_web_build(n: Writer, sln: Any) -> None:
         # page's thread only passes events
         "-sPROXY_TO_PTHREAD=1",
         # (the game's threads, SDL's, the file system's: about ten at once)
-        "-sPTHREAD_POOL_SIZE=16",
+        # Reduced from 16 to 8 for iOS Safari compatibility (threads may serialize on iOS)
+        "-sPTHREAD_POOL_SIZE=8",
         "-sOFFSCREENCANVAS_SUPPORT=1",
         "-sOFFSCREENCANVASES_TO_PTHREAD=#canvas",
         "-sMIN_WEBGL_VERSION=2",
@@ -309,7 +314,8 @@ def generate_web_build(n: Writer, sln: Any) -> None:
         "-sWASMFS=1",
         "-lopfs.js",
         f"-sINITIAL_MEMORY={WEB_MEMORY_BYTES}",
-        "-sALLOW_MEMORY_GROWTH=0",
+        f"-sMAXIMUM_MEMORY={WEB_MEMORY_MAX_BYTES}",
+        "-sALLOW_MEMORY_GROWTH=1",
         # (the game recurses deeply in places: scripts, the BSP's walks)
         "-sSTACK_SIZE=8MB",
         "-sDEFAULT_PTHREAD_STACK_SIZE=2MB",

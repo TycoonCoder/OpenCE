@@ -31,15 +31,16 @@ void web_js_post(int kind, const char *text);
 The Xbox window (port/linux/src/platform.h) is the top 128 MB of the
 WebAssembly memory, 0x80000000 to 0x88000000 (tools/web_build.py makes the
 memory that size). sbrk grows the C heap up to the heap size this reports,
-so reporting the window's start keeps the heap below it. */
+so reporting the window's start keeps the heap below it. The initial memory
+may be smaller (1.5 GB) with growth allowed up to 2.1 GB. */
 
-#define WEB_HEAP_LIMIT 0x80000000UL
+#define WEB_XBOX_WINDOW_START 0x80000000UL
 
 size_t emscripten_get_heap_size(void)
 {
 	size_t size = (size_t)__builtin_wasm_memory_size(0) << 16;
 
-	return size > WEB_HEAP_LIMIT ? WEB_HEAP_LIMIT : size;
+	return size > WEB_XBOX_WINDOW_START ? WEB_XBOX_WINDOW_START : size;
 }
 
 /* ---------- what the page reads and writes (web_shared.h) */
