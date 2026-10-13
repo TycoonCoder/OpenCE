@@ -12,6 +12,7 @@ game (shell_xbox.c's main, renamed halo_game_main by tools/web_build.py).
 
 #include <emscripten.h>
 #include <emscripten/wasmfs.h>
+#include <emscripten/emscripten.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
