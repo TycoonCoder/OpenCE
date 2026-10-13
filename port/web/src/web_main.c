@@ -12,7 +12,6 @@ game (shell_xbox.c's main, renamed halo_game_main by tools/web_build.py).
 
 #include <emscripten.h>
 #include <emscripten/wasmfs.h>
-#include <emscripten/emscripten.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,20 +63,6 @@ void web_frame_shown(void)
 static void set_default(const char *name, const char *value)
 {
 	setenv(name, value, 0);
-}
-
-/* Grow the WebAssembly memory to cover the Xbox window (0x88000000 = 2.1 GB).
-The initial memory is 1.5 GB for iOS compatibility, but the Xbox window
-requires 2.1 GB. Call this before the game starts. */
-static void grow_memory_for_xbox_window(void)
-{
-	/* Target: 0x88000000 bytes = 2.1 GB = 32768 pages (64 KB each) */
-	const size_t target_pages = 0x88000000 / 65536;
-	size_t current_pages = (size_t)__builtin_wasm_memory_size(0);
-	
-	if (current_pages < target_pages) {
-		emscripten_resize_heap(target_pages * 65536);
-	}
 }
 
 int main(int argc, char **argv)

@@ -643,6 +643,16 @@ async function play() {
   }
   try {
     await prepareInit();
+    // Grow WebAssembly memory to 2.1 GB (covers Xbox window at 0x88000000)
+    // Initial memory is 1.5 GB for iOS compatibility, but game needs 2.1 GB
+    if (window.Module && window.Module.HEAP8 && window.Module._emscripten_resize_heap) {
+      const targetBytes = 0x88000000; // 2.1 GB
+      try {
+        await window.Module._emscripten_resize_heap(targetBytes);
+      } catch (e) {
+        console.warn('Memory growth failed:', e);
+      }
+    }
     await loadScript('halo.js');
     const options = {
       canvas,
