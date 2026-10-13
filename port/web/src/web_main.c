@@ -89,7 +89,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Grow memory to cover the Xbox window before the game starts */
-	grow_memory_for_xbox_window();
+	/* Now done from JavaScript (app.js) before loading halo.js */
 
 	opfs = wasmfs_create_opfs_backend();
 	if (!opfs || wasmfs_create_directory("/data", 0777, opfs) != 0)
